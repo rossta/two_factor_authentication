@@ -1,12 +1,11 @@
 require 'spec_helper'
 include AuthenticatedModelHelper
 
-
 describe Devise::Models::TwoFactorAuthenticatable, '#otp_code' do
   let(:instance) { AuthenticatedModelHelper.create_new_user }
   subject { instance.otp_code(time) }
   let(:time) { 1392852456 }
-
+  let(:secret_key) {"2z6hxkdwi3uvrnpn"}
   it "should return an error if no secret is set" do
     expect {
       subject
@@ -67,4 +66,35 @@ describe Devise::Models::TwoFactorAuthenticatable, '#send_two_factor_authenticat
     instance = AuthenticatedModelHelper.create_new_user_with_overrides
     expect(instance.send_two_factor_authentication_code).to eq("Code sent")
   end
+end
+
+describe Devise::Models::TwoFactorAuthenticatable, '#provisioning_uri' do
+  let(:instance) { AuthenticatedModelHelper.create_new_user }
+
+  before do
+    instance.email = "houdini@example.com"
+    instance.run_callbacks :create
+  end
+
+  it "should return uri with user's email" do
+    expect(instance.provisioning_uri).to match(%r{otpauth://totp/houdini@example.com\?secret=\w{16}})
+  end
+
+  it "should return uri with issuer option" do
+    expect(instance.provisioning_uri("houdini")).to match(%r{otpauth://totp/houdini\?secret=\w{16}$})
+  end
+
+  it "should return uri with issuer option" do
+    require 'cgi'
+
+    uri = URI.parse(instance.provisioning_uri("houdini", issuer: 'Magic'))
+    params = CGI::parse(uri.query)
+
+    expect(uri.scheme).to eq("otpauth")
+    expect(uri.host).to eq("totp")
+    expect(uri.path).to eq("/houdini")
+    expect(params['issuer'].shift).to eq('Magic')
+    expect(params['secret'].shift).to match(%r{\w{16}})
+  end
+
 end
